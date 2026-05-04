@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ledger — Deal Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,500;8..60,600;8..60,700&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+  <!-- ============== MASTHEAD ============== -->
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="brand">
+        <h1 class="wordmark">Ledger</h1>
+        <span class="wordmark-rule"></span>
+        <span class="wordmark-sub">Deal Analysis</span>
+      </div>
+      <div class="masthead-meta">
+        <span class="meta-item"><span class="meta-k">Engine</span> Gemini API</span>
+        <span class="meta-item"><span class="meta-k">Build</span> BIS · James &amp; Luke</span>
+        <span class="meta-item" id="status-pill"><span class="meta-k">Status</span> Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============== LANDING (before analysis) ============== -->
+  <main class="container landing" id="landing">
+    <div class="landing-grid">
+
+      <!-- LEFT: input card -->
+      <section class="card input-card">
+        <div class="card-head">
+          <span class="card-label">Source Data</span>
+          <span class="card-hint">Paste · Upload PDF · Upload Spreadsheet</span>
+        </div>
+
+        <div class="tab-row" role="tablist">
+          <button class="tab active" data-tab="text" role="tab">Paste Text</button>
+          <button class="tab" data-tab="pdf" role="tab">PDF</button>
+          <button class="tab" data-tab="spreadsheet" role="tab">Excel / CSV</button>
+        </div>
+
+        <div class="tab-content active" data-content="text">
+          <textarea
+            id="text-input"
+            placeholder="Paste income statement, balance sheet, and cash flow data. Multi-period data yields period-over-period analysis."
+            rows="14"
+          ></textarea>
+        </div>
+
+        <div class="tab-content" data-content="pdf">
+          <label class="file-drop" for="pdf-file">
+            <span class="file-drop-head">Drop a PDF, or click to browse</span>
+            <span class="file-drop-sub">10-Ks, 10-Qs, annual reports</span>
+            <span class="file-name" id="pdf-name"></span>
+            <input type="file" id="pdf-file" accept=".pdf" hidden />
+          </label>
+        </div>
+
+        <div class="tab-content" data-content="spreadsheet">
+          <label class="file-drop" for="ss-file">
+            <span class="file-drop-head">Drop a spreadsheet, or click to browse</span>
+            <span class="file-drop-sub">.xlsx, .xls, .csv</span>
+            <span class="file-name" id="ss-name"></span>
+            <input type="file" id="ss-file" accept=".xlsx,.xls,.csv" hidden />
+          </label>
+        </div>
+
+        <div class="action-row">
+          <button id="analyze-btn" class="btn-primary">Run Analysis</button>
+          <button id="example-btn" class="btn-ghost">Load sample data</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: sidebar explaining the tool -->
+      <aside class="landing-side">
+
+        <section class="info-card">
+          <h3 class="info-head">What this does</h3>
+          <p>Ledger takes raw financial statements and produces a deal-ready analysis memo in seconds. Built for deal teams evaluating investment, acquisition, or strategic transaction decisions.</p>
+        </section>
+
+        <section class="info-card">
+          <h3 class="info-head">How it works</h3>
+          <ol class="numbered-steps">
+            <li><span class="step-k">01</span><span>Extract line items from source using the Gemini API</span></li>
+            <li><span class="step-k">02</span><span>Compute 11 financial ratios deterministically in Python</span></li>
+            <li><span class="step-k">03</span><span>Generate deal-analyst commentary grounded in the computed numbers</span></li>
+            <li><span class="step-k">04</span><span>Export the analysis as a Word or PDF memo</span></li>
+          </ol>
+        </section>
+
+        <section class="info-card info-card-accent">
+          <h3 class="info-head">Why this design</h3>
+          <p>Large language models hallucinate when doing math. Ledger separates reading from arithmetic: the LLM is used only for extraction and narrative, while all ratio calculations are performed in deterministic Python. The result is analysis that is both fluent and arithmetically correct.</p>
+        </section>
+
+        <section class="info-card info-kpis">
+          <h3 class="info-head">At a glance</h3>
+          <div class="kpi-grid">
+            <div class="kpi">
+              <span class="kpi-value">11</span>
+              <span class="kpi-label">Ratios Computed</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-value">3</span>
+              <span class="kpi-label">Input Formats</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-value">2</span>
+              <span class="kpi-label">Memo Exports</span>
+            </div>
+          </div>
+        </section>
+
+      </aside>
+    </div>
+  </main>
+
+  <!-- ============== LOADING ============== -->
+  <section id="loading" class="loading hidden">
+    <div class="loader-bar"><div class="loader-fill"></div></div>
+    <p class="loading-text" id="loading-text">Extracting line items</p>
+  </section>
+
+  <!-- ============== ERROR ============== -->
+  <section id="error" class="error-box hidden">
+    <strong>Error.</strong>
+    <p id="error-text"></p>
+  </section>
+
+  <!-- ============== RESULTS (after analysis) ============== -->
+  <main class="container results-container hidden" id="results">
+
+    <!-- Memo header strip (full width) -->
+    <div class="memo-head">
+      <div class="memo-head-left">
+        <span class="memo-eyebrow">Target</span>
+        <h2 id="company-name" class="memo-title">—</h2>
+      </div>
+      <div class="memo-head-center">
+        <div class="memo-meta-line">
+          <span class="meta-k">Periods</span>
+          <span id="period-count" class="meta-v">—</span>
+        </div>
+        <div class="memo-meta-line">
+          <span class="meta-k">Currency</span>
+          <span id="currency" class="meta-v">—</span>
+        </div>
+      </div>
+      <div class="memo-head-right">
+        <span class="download-label">Export Memo:</span>
+        <button id="download-docx" class="btn-download">
+          <span class="dl-format">DOCX</span>
+          <span class="dl-arrow">↓</span>
+        </button>
+        <button id="download-pdf" class="btn-download">
+          <span class="dl-format">PDF</span>
+          <span class="dl-arrow">↓</span>
+        </button>
+        <button id="new-analysis" class="btn-ghost btn-ghost-sm">New Analysis</button>
+      </div>
+    </div>
+
+    <!-- Two-column memo body -->
+    <div class="results-grid">
+
+      <!-- LEFT COLUMN: Summary, Trends, Ratios -->
+      <div class="results-col-left">
+
+        <!-- Executive Summary -->
+        <section class="memo-section">
+          <h3 class="section-head">Executive Summary</h3>
+          <p id="summary-text" class="summary-body"></p>
+        </section>
+
+        <!-- Trends -->
+        <section class="memo-section" id="trends-block">
+          <h3 class="section-head">Period-over-Period Trends</h3>
+          <div id="trends-grid" class="trends-grid"></div>
+          <p id="trend-commentary" class="trend-commentary"></p>
+        </section>
+
+        <!-- Ratios -->
+        <section class="memo-section">
+          <h3 class="section-head">Financial Ratios</h3>
+          <p class="section-note">All ratios computed in Python. No LLM-derived figures.</p>
+          <div id="ratios-container" class="ratios-container"></div>
+        </section>
+
+      </div>
+
+      <!-- RIGHT COLUMN: Highlights, Concerns, Risks, Q&A -->
+      <div class="results-col-right">
+
+        <section class="memo-section">
+          <h3 class="section-subhead">Investment Highlights</h3>
+          <ul id="strengths-list" class="bullet-list bullet-positive"></ul>
+        </section>
+
+        <section class="memo-section">
+          <h3 class="section-subhead">Areas of Concern</h3>
+          <ul id="concerns-list" class="bullet-list"></ul>
+        </section>
+
+        <section class="memo-section">
+          <h3 class="section-subhead">Key Risks</h3>
+          <ul id="flags-list" class="bullet-list bullet-risk"></ul>
+        </section>
+
+        <section class="memo-section chat-section">
+          <h3 class="section-subhead">Analyst Q&amp;A</h3>
+          <p class="section-note">Query the analysis with follow-up questions.</p>
+          <div id="chat-history" class="chat-history"></div>
+          <div class="chat-input-row">
+            <input
+              type="text"
+              id="chat-input"
+              placeholder="What is driving the change in operating margin?"
+            />
+            <button id="chat-send" class="btn-primary btn-small">Send</button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <span>Ledger · Deal Analysis</span>
+    <span class="footer-dot">·</span>
+    <span>Built with the Gemini API</span>
+    <span class="footer-dot">·</span>
+    <span>BIS Self-Selected Coursework</span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
